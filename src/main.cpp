@@ -228,7 +228,7 @@ void setup()
     for(int i=0; i<=20; i++){
       configManager.data.clientName[i] = mac[i];
     }
-    configManager.save();forceRestart();
+    configManager.save();
   }
 
   //Set the timezone
@@ -296,7 +296,9 @@ void setup()
     splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\"");
   }else{
     ahtErr = false; 
-    aht.softReset();
+    aht.setCycleMode();
+
+    //aht.softReset();
     Serial.println("AHT10 Found!");
   }
 
@@ -305,19 +307,17 @@ void setup()
 
 void loop()
 {
-  //software interrupts
-  WiFiManager.loop();
-  updater.loop();    
+  //software interrupts.. dont touch next line!
+  WiFiManager.loop();updater.loop();configManager.loop(); 
 
   if(WiFiManager.isCaptivePortal()){
-    digitalWrite(Heartbeat_LED, (millis() / 100) % 2);// doesnt even need a timer ... can be placed just inside the loop
+    digitalWrite(Heartbeat_LED, (millis() / 100) % 2); // doesnt even need a timer ... can be placed just inside the loop
     return;
   }else{
-    // toggle LED every second
-    if(configManager.data.heartbeat){digitalWrite(Heartbeat_LED, (millis() / 1000) % 2);}
+    // toggle LED every second if heartbeat is activated in config
+    digitalWrite(Heartbeat_LED, configManager.data.heartbeat ? ((millis() / 1000) % 2) : 1);  
   }
      
-
   // restart over web interface...
   if(configManager.data.forceRestart){forceRestart();}
 
