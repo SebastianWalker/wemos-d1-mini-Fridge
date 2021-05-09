@@ -30,8 +30,13 @@
   // AHT10: Temperatur, Humidity
   #include <Adafruit_AHTX0.h>
   boolean ahtErr = true; // set to false once wire.begin is successful 
-  Adafruit_AHTX0 aht;
-  Adafruit_Sensor *aht_humidity, *aht_temp;
+  //Adafruit_AHTX0 aht;
+  //Adafruit_Sensor *aht_humidity, *aht_temp;
+
+  // AHT10: alternative lib
+  #include <AHT10.h>
+  AHT10 aht(AHT10_ADDRESS_0X38);
+
 
 // Stuff for the DHT sensor
   #include "DHT.h"
@@ -121,6 +126,9 @@ void splunkpost(String PostData){
   // only send time string to splunk if it is synced, else omit it and let splunk use index time...
   String timeField = timeSync.isSynced() ? "\"time\" : \"" + String(getEpoch()) + "\" , " : "" ;
 
+  //Serial.println(String(configManager.data.clientName));
+  //String clientName = (String(configManager.data.clientName) == "MAC_ADDRESS") ? WiFi.macAddress() : String(configManager.data.clientName);
+  //hecMessage = "{ \"host\": \"" + clientName + "\", " 
   hecMessage = "{ \"host\": \"" + String(configManager.data.clientName) + "\", " 
                  "\"sourcetype\": \"" + String(configManager.data.sourcetype) + "\", " 
                  "\"index\": \"" + String(configManager.data.index) + "\", " 
@@ -208,6 +216,11 @@ void setup()
   WiFiManager.begin(AP_Name); //192.168.4.1
 
   // if no client name is set (default=MAC_ADRESS) return the MAC instead
+  Serial.println("stored:");
+  Serial.println(configManager.data.clientName);
+  Serial.println();
+
+
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){
     char mac[20]; // clientName is size 20...
     WiFi.macAddress().toCharArray(mac, 20);
@@ -215,7 +228,7 @@ void setup()
     for(int i=0; i<=20; i++){
       configManager.data.clientName[i] = mac[i];
     }
-    configManager.save();
+    configManager.save();forceRestart();
   }
 
   //Set the timezone
@@ -264,6 +277,7 @@ void setup()
   }
   // MAX44009 lux sensor END
 
+/*
   // AHT10
   if (!aht.begin()){
     splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\""); 
@@ -275,6 +289,16 @@ void setup()
     aht_humidity = aht.getHumiditySensor();
   }
   // AHT10 END
+*/
+
+  // AHT10 alternative lib
+  if (!aht.begin()){
+    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\"");
+  }else{
+    ahtErr = false; 
+    aht.softReset();
+    Serial.println("AHT10 Found!");
+  }
 
   splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
 }
@@ -284,9 +308,8 @@ void loop()
   //software interrupts
   WiFiManager.loop();
   updater.loop();    
-  yield();
 
-  if (WiFiManager.isCaptivePortal()){
+  if(WiFiManager.isCaptivePortal()){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);// doesnt even need a timer ... can be placed just inside the loop
     return;
   }else{
@@ -328,12 +351,13 @@ void loop()
       bme_humidity->getEvent(&humidity_event);
     // BME280 END
 
+/*
     // AHT10
       sensors_event_t aht10_humidity, aht10_temp;
       aht_humidity->getEvent(&aht10_humidity);
       aht_temp->getEvent(&aht10_temp);
     // AHT10 END
-
+*/
 
   // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
@@ -357,11 +381,15 @@ void loop()
     // MAX44009 found at setup on I2C ?
     String MAX44009_data = luxErr ? "" :  "\"MAX44009_lux\": \"" + String(luxSensor.getLux()) + "\" , "
                                           "\"MAX44009_IntegrationTime\": \"" + String(luxSensor.getIntegrationTime()/1000.0) + "\" , ";
-   
+/*   
     // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
                                        "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
-    
+*/    
+
+    // AHT10 
+    String AHT10_data = (ahtErr) ? "" : "\"AHT10_Temp\": \"" + String(aht.readTemperature()) + "\" , "
+                                       "\"AHT10_Humidity\": \"" + String(aht.readHumidity()) + "\" , ";
 
     // build the event data string
     eventData =   "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
