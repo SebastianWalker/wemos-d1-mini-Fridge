@@ -1,0 +1,64 @@
+[
+    {
+        "name": "projectName",
+        "label": "Project Name",
+        "type": "char",
+        "hidden":true,
+        "length": 32,
+        "value": "SensorBox"
+    },
+    {
+        "name": "splunkindexer",
+        "label": "Splunk Indexer (IP:Port)",
+        "type": "char",
+        "length": 25,
+        "value": "54.82.123.23:8088"
+    },
+    {
+        "name": "index",
+        "label": "Splunk Index Name",
+        "type": "char",
+        "length": 40,
+        "value": "esp8266hec"
+    },
+    {
+        "name": "sourcetype",
+        "label": "Splunk Sourcetype",
+        "type": "char",
+        "length": 40,
+        "value": "diySensor"
+    },
+    {
+        "name": "collectorToken",
+        "label": "HEC Token",
+        "type": "char",
+        "length": 40,
+        "value": "fe6f64d8-847e-405b-8f1b-034ffd76a261"
+    },
+    {
+        "name": "clientName",
+        "label": "Client Name",
+        "type": "char",
+        "length": 20,
+        "value": "MAC_ADDRESS" 
+    },
+    {
+        "name": "updateSpeed",
+        "label": "Update (ms)",
+        "type": "uint16_t",
+        "value": 5000
+    },
+    {
+        "name": "sensorTimezone",
+        "label": "Sensor Timezone",
+        "type": "char",
+        "length": 40,
+        "value": "CET-1CEST,M3.5.0,M10.5.0/3"
+    },
+    {
+        "name": "forceRestart",
+        "label": "force restart",
+        "type": "bool",
+        "value": false
+    }
+]
