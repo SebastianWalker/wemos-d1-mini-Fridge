@@ -60,5 +60,17 @@
         "label": "force restart",
         "type": "bool",
         "value": false
+    },
+    {
+        "name": "heartbeat",
+        "label": "blink heartbeat",
+        "type": "bool",
+        "value": true
+    },
+    {
+        "name": "pirInstalled",
+        "label": "PIR Sensor @D5?",
+        "type": "bool",
+        "value": false
     }
 ]

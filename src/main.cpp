@@ -119,7 +119,7 @@ long getEpoch(){
 void splunkpost(String PostData){
 
   // only send time string to splunk if it is synced, else omit it and let splunk use index time...
-  String timeField = timeSync.isSynced() ? "" : "\"time\" : \"" + String(getEpoch()) + "\" , ";
+  String timeField = timeSync.isSynced() ? "\"time\" : \"" + String(getEpoch()) + "\" , " : "" ;
 
   hecMessage = "{ \"host\": \"" + String(configManager.data.clientName) + "\", " 
                  "\"sourcetype\": \"" + String(configManager.data.sourcetype) + "\", " 
@@ -191,8 +191,6 @@ void forceRestart(){
 }
 
 
-
-
 void setup()
 {
   Serial.begin(115200);
@@ -211,10 +209,10 @@ void setup()
 
   // if no client name is set (default=MAC_ADRESS) return the MAC instead
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){
-    char mac[17];
-    WiFi.macAddress().toCharArray(mac, 17);
+    char mac[20]; // clientName is size 20...
+    WiFi.macAddress().toCharArray(mac, 20);
     // set the mac char by char... no idea how to do it in one go
-    for(int i=0; i<=17; i++){
+    for(int i=0; i<=20; i++){
       configManager.data.clientName[i] = mac[i];
     }
     configManager.save();
@@ -288,20 +286,22 @@ void loop()
   updater.loop();    
   yield();
 
-  // toggle LED every second
-  digitalWrite(Heartbeat_LED, (millis() / 1000) % 2); // doesnt even need a timer ... can be placed just inside the loop
-
-
   if (WiFiManager.isCaptivePortal()){
-        return;
-        }
+    digitalWrite(Heartbeat_LED, (millis() / 100) % 2);// doesnt even need a timer ... can be placed just inside the loop
+    return;
+  }else{
+    // toggle LED every second
+    if(configManager.data.heartbeat){digitalWrite(Heartbeat_LED, (millis() / 1000) % 2);}
+  }
+     
 
   // restart over web interface...
   if(configManager.data.forceRestart){forceRestart();}
 
   // read PIR state
-  checkPir();
-
+  if(configManager.data.pirInstalled){
+    checkPir();
+  }
 
   if (millis() - msTickSplunk > configManager.data.updateSpeed){
     msTickSplunk = millis();
@@ -343,6 +343,8 @@ void loop()
     
 
     // only report these sensors if they are up and running... 
+    String PIR_data = (configManager.data.pirInstalled) ? "\"PIR_State\": \"" + String(pirTripped) + "\" , " : "";
+
     // DHT11 reporting NaN ?
     String DHT11_data = (isnan(h) || isnan(t)) ? "" : "\"DHT11_Temp\": \"" + String(t) + "\" , "
                                                       "\"DHT11_Humidity\": \"" + String(h) + "\" , ";
@@ -362,8 +364,8 @@ void loop()
     
 
     // build the event data string
-    eventData =   "\"PIR_State\": \"" + String(pirTripped) + "\" , "
-                  "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
+    eventData =   "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
+                  + PIR_data
                   + DHT11_data 
                   + BME280_data
                   + AHT10_data  
