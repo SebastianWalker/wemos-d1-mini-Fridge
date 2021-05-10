@@ -30,12 +30,12 @@
   // AHT10: Temperatur, Humidity
   #include <Adafruit_AHTX0.h>
   boolean ahtErr = true; // set to false once wire.begin is successful 
-  //Adafruit_AHTX0 aht;
-  //Adafruit_Sensor *aht_humidity, *aht_temp;
+  Adafruit_AHTX0 aht;
+  Adafruit_Sensor *aht_humidity, *aht_temp;
 
   // AHT10: alternative lib
-  #include <AHT10.h>
-  AHT10 aht(AHT10_ADDRESS_0X38);
+  //#include <AHT10.h>
+  //AHT10 aht(AHT10_ADDRESS_0X38);
 
 
 // Stuff for the DHT sensor
@@ -58,7 +58,6 @@ int LDRvalue = 0;
 
 // HC-SR501 PIR
 #define PIR D5  // input pin
-
 static unsigned long pirTrippedTime = 0 ; // last time in millis() the PIR got tripped by motion
 boolean pirTripped = false; // is motion detected? true/false
 
@@ -126,23 +125,18 @@ void splunkpost(String PostData){
   // only send time string to splunk if it is synced, else omit it and let splunk use index time...
   String timeField = timeSync.isSynced() ? "\"time\" : \"" + String(getEpoch()) + "\" , " : "" ;
 
-  //Serial.println(String(configManager.data.clientName));
-  //String clientName = (String(configManager.data.clientName) == "MAC_ADDRESS") ? WiFi.macAddress() : String(configManager.data.clientName);
-  //hecMessage = "{ \"host\": \"" + clientName + "\", " 
-  hecMessage = "{ \"host\": \"" + String(configManager.data.clientName) + "\", " 
-                 "\"sourcetype\": \"" + String(configManager.data.sourcetype) + "\", " 
-                 "\"index\": \"" + String(configManager.data.index) + "\", " 
-                 + timeField +
-                 "\"fields\" : {"
-                                "\"IP\" : \"" + String(WiFi.localIP().toString()) + "\" , "
-                                "\"UTC\" : \"" + String(getUTC()) + "\" , "
-                                "\"Localtime\" : \"" + String(getLocaltime()) + "\" , "
-                                "\"interval\" : \"" + String(configManager.data.updateSpeed/1000) + "\" "
-                  "}, "
-                  "\"event\"  : {" + PostData + "}"
-               "}";
-  
-  String payload = hecMessage;
+  String payload  = "{ \"host\": \"" + String(configManager.data.clientName) + "\", " 
+                      "\"sourcetype\": \"" + String(configManager.data.sourcetype) + "\", " 
+                      "\"index\": \"" + String(configManager.data.index) + "\", " 
+                      + timeField +
+                      "\"fields\" : {"
+                                      "\"IP\" : \"" + String(WiFi.localIP().toString()) + "\" , "
+                                      "\"UTC\" : \"" + String(getUTC()) + "\" , "
+                                      "\"Localtime\" : \"" + String(getLocaltime()) + "\" , "
+                                      "\"interval\" : \"" + String(configManager.data.updateSpeed/1000) + "\" "
+                        "}, "
+                        "\"event\"  : {" + PostData + "}"
+                    "}";
 
   //Build the request
   WiFiClient client; // just to avoid deprecation error on http.begin(url)
@@ -151,10 +145,8 @@ void splunkpost(String PostData){
   String tokenValue="Splunk " + String(configManager.data.collectorToken);
   
   // fire at will!! 
-  http.begin(client, splunkurl); // changed for deprected http.begin(url)
-  //http.begin(splunkurl);
+  http.begin(client, splunkurl);
   http.addHeader("Content-Type", "application/json");
-  //Serial.println(tokenValue);
   http.addHeader("Authorization", tokenValue);
 
   Serial.print("splunking: ");
@@ -168,20 +160,12 @@ void splunkpost(String PostData){
   Serial.println();
   http.end();
 
-  // 
 }
 
 void checkPir(){ 
-  // function need to get smarter
-  // see the transition from HIGH/LOW LOW/HIGH
-  // get the time in UTC instead of millis()
-  // if the splunk send intervall is high.. this only sends the state just before the measurement..
-  // if intervall = 10m and PIR is triggered @2m but then nothing anymore.. we would report nothing..
   pirTripped = digitalRead(PIR);
-  //digitalWrite(PIR_LED, pirTripped);
   if (pirTripped) pirTrippedTime = millis();
 }
-
 
 // Software restart 
 void(* resetFunc) (void) = 0; //declare reset function @ address 0
@@ -198,7 +182,6 @@ void forceRestart(){
   resetFunc();
 }
 
-
 void setup()
 {
   Serial.begin(115200);
@@ -212,15 +195,9 @@ void setup()
   strcpy(AP_Name, configManager.data.projectName);
   strcat(AP_Name, " - ");
   strcat(AP_Name, WiFi.macAddress().c_str());
-
   WiFiManager.begin(AP_Name); //192.168.4.1
 
   // if no client name is set (default=MAC_ADRESS) return the MAC instead
-  Serial.println("stored:");
-  Serial.println(configManager.data.clientName);
-  Serial.println();
-
-
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){
     char mac[20]; // clientName is size 20...
     WiFi.macAddress().toCharArray(mac, 20);
@@ -239,14 +216,13 @@ void setup()
 
   if (timeSync.isSynced())
   {
-    time_t now = time(nullptr);
-    Serial.print(PSTR("Local time: ")); Serial.println(asctime(localtime(&now)));
-    Serial.print(PSTR("UTC: ")); Serial.println(asctime(gmtime(&now)));
+    //time_t now = time(nullptr);
+    //Serial.print(PSTR("Local time: ")); Serial.println(asctime(localtime(&now)));
+    //Serial.print(PSTR("UTC: ")); Serial.println(asctime(gmtime(&now)));
   }
   else 
   {
     splunkpost("\"status\" : \"ERROR\", \"msg\" : \"No time sync available.\""); 
-    // set an error LED high..
   }
 
   // set input/output pins
@@ -277,30 +253,16 @@ void setup()
   }
   // MAX44009 lux sensor END
 
-/*
   // AHT10
   if (!aht.begin()){
     splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\""); 
   }
   else{
     ahtErr = false; 
-    Serial.println("AHT10/AHT20 Found!");
     aht_temp = aht.getTemperatureSensor();
     aht_humidity = aht.getHumiditySensor();
   }
   // AHT10 END
-*/
-
-  // AHT10 alternative lib
-  if (!aht.begin()){
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\"");
-  }else{
-    ahtErr = false; 
-    aht.setCycleMode();
-
-    //aht.softReset();
-    Serial.println("AHT10 Found!");
-  }
 
   splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
 }
@@ -311,7 +273,7 @@ void loop()
   WiFiManager.loop();updater.loop();configManager.loop(); 
 
   if(WiFiManager.isCaptivePortal()){
-    digitalWrite(Heartbeat_LED, (millis() / 100) % 2); // doesnt even need a timer ... can be placed just inside the loop
+    digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
     return;
   }else{
     // toggle LED every second if heartbeat is activated in config
@@ -332,38 +294,32 @@ void loop()
     digitalWrite(Splunking_LED, HIGH);
 
     // Read the light intensity
-    LDRvalue=0; // reset
-    for(int i=0; i<4; i++){
-      LDRvalue = LDRvalue + analogRead(LDR); 
-      delay(10);
-    }
-    LDRvalue = map(LDRvalue / 4, 0,1024,0,100);
+      LDRvalue = map(analogRead(LDR), 0,1024,0,100);
   
     // PIR
     // if last trigger time is inside the last update intervall then log motion as true, else the checkPIR function has reset the pirTripped to 0 anyways
-    if (pirTrippedTime >= msTickSplunk-configManager.data.updateSpeed){pirTripped = 1;}
+      if (pirTrippedTime >= msTickSplunk-configManager.data.updateSpeed){pirTripped = 1;}
 
-  
-  // BME280
+    // BME280
       sensors_event_t temp_event, pressure_event, humidity_event;
       bme_temp->getEvent(&temp_event);
       bme_pressure->getEvent(&pressure_event);
       bme_humidity->getEvent(&humidity_event);
     // BME280 END
 
-/*
+
     // AHT10
       sensors_event_t aht10_humidity, aht10_temp;
       aht_humidity->getEvent(&aht10_humidity);
       aht_temp->getEvent(&aht10_temp);
     // AHT10 END
-*/
 
-  // Reading temperature or humidity takes about 250 milliseconds!
+
+    // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    float h = dht.readHumidity();
+      float h = dht.readHumidity();
     // Read temperature as Celsius (the default)
-    float t = dht.readTemperature();
+      float t = dht.readTemperature();
     
 
     // only report these sensors if they are up and running... 
@@ -381,16 +337,16 @@ void loop()
     // MAX44009 found at setup on I2C ?
     String MAX44009_data = luxErr ? "" :  "\"MAX44009_lux\": \"" + String(luxSensor.getLux()) + "\" , "
                                           "\"MAX44009_IntegrationTime\": \"" + String(luxSensor.getIntegrationTime()/1000.0) + "\" , ";
-/*   
+ 
     // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
                                        "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
-*/    
-
+  
+/*
     // AHT10 
     String AHT10_data = (ahtErr) ? "" : "\"AHT10_Temp\": \"" + String(aht.readTemperature()) + "\" , "
                                        "\"AHT10_Humidity\": \"" + String(aht.readHumidity()) + "\" , ";
-
+*/
     // build the event data string
     eventData =   "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
                   + PIR_data
