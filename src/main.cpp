@@ -1,5 +1,19 @@
 #include <Arduino.h>
 
+// used to get the reset reason
+extern "C" {
+#include <user_interface.h>
+}
+enum rst_reason {
+ REASON_DEFAULT_RST = 0,      /* normal startup by power on */
+ REASON_WDT_RST = 1,          /* hardware watch dog reset */
+ REASON_EXCEPTION_RST = 2,    /* exception reset, GPIO status won’t change */
+ REASON_SOFT_WDT_RST   = 3,   /* software watch dog reset, GPIO status won’t change */
+ REASON_SOFT_RESTART = 4,     /* software restart ,system_restart , GPIO status won’t change */
+ REASON_DEEP_SLEEP_AWAKE = 5, /* wake up from deep-sleep */
+ REASON_EXT_SYS_RST      = 6  /* external system reset */
+};
+
 // Stuff for the WiFi manager 
 #include "LittleFS.h"
 #include "WiFiManager.h"
@@ -177,6 +191,36 @@ void forceRestart(){
 
 void setup()
 {
+  rst_info *resetInfo;
+  resetInfo = ESP.getResetInfoPtr();
+  int rst_cause = resetInfo->reason;
+  switch (rst_cause){
+    case REASON_DEFAULT_RST:
+      break;
+
+    case REASON_WDT_RST:
+      break;
+
+    case REASON_EXCEPTION_RST:
+      break;
+
+    case REASON_SOFT_WDT_RST:
+      break;
+
+    case REASON_SOFT_RESTART:
+      break;
+
+    case REASON_DEEP_SLEEP_AWAKE:
+      break;
+
+    case REASON_EXT_SYS_RST:
+      break;
+
+    default:
+      break;     
+  }
+
+
   Serial.begin(115200);
 
   LittleFS.begin();
@@ -257,8 +301,9 @@ void setup()
     aht_humidity = aht.getHumiditySensor();
   }
   // AHT10 END
-
-  splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
+  String msg = "\"status\" : \"INFO\", \"msg\" : \"restarted " + String(rst_cause) + "\"";
+  splunkpost(msg); 
+  //splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
 }
 
 void loop()
