@@ -33,11 +33,6 @@
   Adafruit_AHTX0 aht;
   Adafruit_Sensor *aht_humidity, *aht_temp;
 
-  // AHT10: alternative lib
-  //#include <AHT10.h>
-  //AHT10 aht(AHT10_ADDRESS_0X38);
-
-
 // Stuff for the DHT sensor
   #include "DHT.h"
   #define DHTPIN D7 
@@ -46,31 +41,30 @@
 
 /*
 // HC-SR04 ultra sonic distance sensor
-#include <Ultrasonic.h>
-#define HCSR04_ECHO D6
-#define HCSR04_TRIG D7
-Ultrasonic HCSR04(HCSR04_TRIG, HCSR04_ECHO);
+  #include <Ultrasonic.h>
+  #define HCSR04_ECHO D6
+  #define HCSR04_TRIG D7
+  Ultrasonic HCSR04(HCSR04_TRIG, HCSR04_ECHO);
 */
 
 // LDR input pin (ESP8266 only got one ADC on A0)
-#define LDR A0
-int LDRvalue = 0;
+  #define LDR A0
+  int LDRvalue = 0;
 
 // HC-SR501 PIR
-#define PIR D5  // input pin
-static unsigned long pirTrippedTime = 0 ; // last time in millis() the PIR got tripped by motion
-boolean pirTripped = false; // is motion detected? true/false
+  #define PIR D5  // input pin
+  static unsigned long pirTrippedTime = 0 ; // last time in millis() the PIR got tripped by motion
+  boolean pirTripped = false; // is motion detected? true/false
 
 // LEDs
-#define Heartbeat_LED D4 // D4 = GPIO2 = onchip LED
-#define Splunking_LED D8 // output pin for measurement and splunking indicator
+  #define Heartbeat_LED D4 // D4 = GPIO2 = onchip LED
+  #define Splunking_LED D8 // output pin for measurement and splunking indicator
 
 // Stuff for Splunk
-String eventData="";
-String hecMessage="";
+  String eventData="";
 
 // variable for timing
-static unsigned long msTickSplunk = 0;
+  static unsigned long msTickSplunk = 0;
 
 /*
  * Returns a string of Localtime
@@ -159,7 +153,6 @@ void splunkpost(String PostData){
   Serial.printf("HTTP: %d", httpResponseCode);  
   Serial.println();
   http.end();
-
 }
 
 void checkPir(){ 
@@ -201,10 +194,12 @@ void setup()
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){
     char mac[20]; // clientName is size 20...
     WiFi.macAddress().toCharArray(mac, 20);
+
     // set the mac char by char... no idea how to do it in one go
     for(int i=0; i<=20; i++){
       configManager.data.clientName[i] = mac[i];
     }
+
     configManager.save();
   }
 
@@ -214,15 +209,13 @@ void setup()
   //Wait for connection
   timeSync.waitForSyncResult(5000);
 
-  if (timeSync.isSynced())
-  {
+  if (!timeSync.isSynced()){
+    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"No time sync available.\"");
+  }
+  else{
     //time_t now = time(nullptr);
     //Serial.print(PSTR("Local time: ")); Serial.println(asctime(localtime(&now)));
     //Serial.print(PSTR("UTC: ")); Serial.println(asctime(gmtime(&now)));
-  }
-  else 
-  {
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"No time sync available.\""); 
   }
 
   // set input/output pins
@@ -247,7 +240,8 @@ void setup()
   // MAX44009 lux sensor
   if (!luxSensor.isConnected()){
     splunkpost("\"status\" : \"ERROR\", \"msg\" : \"MAX44009 not found.\""); 
-  }else{
+  }
+  else{
     luxSensor.setAutomaticMode();
     luxErr = false;
   }
@@ -272,82 +266,76 @@ void loop()
   //software interrupts.. dont touch next line!
   WiFiManager.loop();updater.loop();configManager.loop(); 
 
-  if(WiFiManager.isCaptivePortal()){
+  if (WiFiManager.isCaptivePortal()){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
     return;
-  }else{
+  }
+  else{
     // toggle LED every second if heartbeat is activated in config
     digitalWrite(Heartbeat_LED, configManager.data.heartbeat ? ((millis() / 1000) % 2) : 1);  
   }
      
   // restart over web interface...
-  if(configManager.data.forceRestart){forceRestart();}
+  if (configManager.data.forceRestart){forceRestart();}
 
   // read PIR state
-  if(configManager.data.pirInstalled){
-    checkPir();
-  }
+  if (configManager.data.pirInstalled){checkPir();}
 
   if (millis() - msTickSplunk > configManager.data.updateSpeed){
     msTickSplunk = millis();
 
     digitalWrite(Splunking_LED, HIGH);
 
-    // Read the light intensity
-      LDRvalue = map(analogRead(LDR), 0,1024,0,100);
+  // Read the light intensity
+    LDRvalue = map(analogRead(LDR), 0,1024,0,100);
   
-    // PIR
-    // if last trigger time is inside the last update intervall then log motion as true, else the checkPIR function has reset the pirTripped to 0 anyways
-      if (pirTrippedTime >= msTickSplunk-configManager.data.updateSpeed){pirTripped = 1;}
+  // PIR
+  // if last trigger time is inside the last update intervall then log motion as true, else the checkPIR function has reset the pirTripped to 0 anyways
+    if (pirTrippedTime >= msTickSplunk-configManager.data.updateSpeed){pirTripped = 1;}
 
-    // BME280
-      sensors_event_t temp_event, pressure_event, humidity_event;
-      bme_temp->getEvent(&temp_event);
-      bme_pressure->getEvent(&pressure_event);
-      bme_humidity->getEvent(&humidity_event);
-    // BME280 END
-
-
-    // AHT10
-      sensors_event_t aht10_humidity, aht10_temp;
-      aht_humidity->getEvent(&aht10_humidity);
-      aht_temp->getEvent(&aht10_temp);
-    // AHT10 END
+  // BME280
+    sensors_event_t temp_event, pressure_event, humidity_event;
+    bme_temp->getEvent(&temp_event);
+    bme_pressure->getEvent(&pressure_event);
+    bme_humidity->getEvent(&humidity_event);
+  // BME280 END
 
 
-    // Reading temperature or humidity takes about 250 milliseconds!
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-      float h = dht.readHumidity();
-    // Read temperature as Celsius (the default)
-      float t = dht.readTemperature();
-    
+  // AHT10
+    sensors_event_t aht10_humidity, aht10_temp;
+    aht_humidity->getEvent(&aht10_humidity);
+    aht_temp->getEvent(&aht10_temp);
+  // AHT10 END
 
-    // only report these sensors if they are up and running... 
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+    float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+    float t = dht.readTemperature();
+  
+
+  // only report these sensors if they are up and running... 
     String PIR_data = (configManager.data.pirInstalled) ? "\"PIR_State\": \"" + String(pirTripped) + "\" , " : "";
 
-    // DHT11 reporting NaN ?
+  // DHT11 reporting NaN ?
     String DHT11_data = (isnan(h) || isnan(t)) ? "" : "\"DHT11_Temp\": \"" + String(t) + "\" , "
                                                       "\"DHT11_Humidity\": \"" + String(h) + "\" , ";
 
-    // BME280 found at setup on I2C ?
+  // BME280 found at setup on I2C ?
     String BME280_data = bmeErr ? "" :  "\"BME280_Temp\": \"" + String(temp_event.temperature) + "\" , "
                                         "\"BME280_Pressure\": \"" + String(pressure_event.pressure) + "\" , "
                                         "\"BME280_Humidity\": \"" + String(humidity_event.relative_humidity) + "\" , ";
 
-    // MAX44009 found at setup on I2C ?
+  // MAX44009 found at setup on I2C ?
     String MAX44009_data = luxErr ? "" :  "\"MAX44009_lux\": \"" + String(luxSensor.getLux()) + "\" , "
                                           "\"MAX44009_IntegrationTime\": \"" + String(luxSensor.getIntegrationTime()/1000.0) + "\" , ";
  
-    // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
+  // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
                                        "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
   
-/*
-    // AHT10 
-    String AHT10_data = (ahtErr) ? "" : "\"AHT10_Temp\": \"" + String(aht.readTemperature()) + "\" , "
-                                       "\"AHT10_Humidity\": \"" + String(aht.readHumidity()) + "\" , ";
-*/
-    // build the event data string
+  // build the event data string
     eventData =   "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
                   + PIR_data
                   + DHT11_data 
@@ -357,10 +345,9 @@ void loop()
                   //"\"HCSR04_Distance\": \"" + String(HCSR04.read()) + "\" , "
                   "\"uptime\": \"" + String(millis()/1000) + "\" ";
 
-    //send off the data
+  //send off the data
     splunkpost(eventData);
 
     digitalWrite(Splunking_LED, LOW);
-
   }
 }
