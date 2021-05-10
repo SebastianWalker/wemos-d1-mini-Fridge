@@ -1,0 +1,15 @@
+[
+    {
+        "name": "macAddress",
+        "type": "char",
+        "length": 20,
+        "direction": "display"
+    },
+    {
+        "name": "httpResponse",
+        "type": "uint16_t",
+        "direction": "display",
+        "display": "graph",
+        "xaxis": 120
+    }
+]

@@ -4,15 +4,6 @@
 extern "C" {
 #include <user_interface.h>
 }
-enum rst_reason {
- REASON_DEFAULT_RST = 0,      /* normal startup by power on */
- REASON_WDT_RST = 1,          /* hardware watch dog reset */
- REASON_EXCEPTION_RST = 2,    /* exception reset, GPIO status won’t change */
- REASON_SOFT_WDT_RST   = 3,   /* software watch dog reset, GPIO status won’t change */
- REASON_SOFT_RESTART = 4,     /* software restart ,system_restart , GPIO status won’t change */
- REASON_DEEP_SLEEP_AWAKE = 5, /* wake up from deep-sleep */
- REASON_EXT_SYS_RST      = 6  /* external system reset */
-};
 
 // Stuff for the WiFi manager 
 #include "LittleFS.h"
@@ -21,6 +12,7 @@ enum rst_reason {
 #include "updater.h"
 #include "fetch.h"
 #include "configManager.h"
+#include "dashboard.h"
 #include "timeSync.h"
 #include <TZ.h>
 #include "ESP8266HTTPClient.h"
@@ -167,6 +159,9 @@ void splunkpost(String PostData){
   Serial.printf("HTTP: %d", httpResponseCode);  
   Serial.println();
   http.end();
+
+  dash.data.httpResponse = httpResponseCode;
+  dash.send();
 }
 
 void checkPir(){ 
@@ -195,37 +190,34 @@ void setup()
   resetInfo = ESP.getResetInfoPtr();
   int rst_cause = resetInfo->reason;
   switch (rst_cause){
-    case REASON_DEFAULT_RST:
+    case REASON_DEFAULT_RST:      /* normal startup by power on */
       break;
 
-    case REASON_WDT_RST:
+    case REASON_WDT_RST:          /* hardware watch dog reset */
       break;
 
-    case REASON_EXCEPTION_RST:
+    case REASON_EXCEPTION_RST:    /* exception reset, GPIO status won’t change */
       break;
 
-    case REASON_SOFT_WDT_RST:
+    case REASON_SOFT_WDT_RST:     /* software watch dog reset, GPIO status won’t change */
       break;
 
-    case REASON_SOFT_RESTART:
+    case REASON_SOFT_RESTART:     /* software restart ,system_restart , GPIO status won’t change */
       break;
 
-    case REASON_DEEP_SLEEP_AWAKE:
+    case REASON_DEEP_SLEEP_AWAKE: /* wake up from deep-sleep */
       break;
 
-    case REASON_EXT_SYS_RST:
+    case REASON_EXT_SYS_RST:      /* external system reset */
       break;
 
     default:
       break;     
   }
 
-
   Serial.begin(115200);
 
-  LittleFS.begin();
-  GUI.begin();
-  configManager.begin();
+  LittleFS.begin(); GUI.begin(); configManager.begin(); dash.begin(1000);
 
   // add the MAC to the Project name to avoid duplicate SSIDs
   char AP_Name[60]; // 60 should be more than enough...
@@ -236,21 +228,17 @@ void setup()
 
   // if no client name is set (default=MAC_ADRESS) return the MAC instead
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){
-    char mac[20]; // clientName is size 20...
-    WiFi.macAddress().toCharArray(mac, 20);
-
-    // set the mac char by char... no idea how to do it in one go
-    for(int i=0; i<=20; i++){
-      configManager.data.clientName[i] = mac[i];
-    }
-
+    WiFi.macAddress().toCharArray(configManager.data.clientName, 20);
     configManager.save();
   }
 
-  //Set the timezone
+  // set mac to dashboard
+  WiFi.macAddress().toCharArray(dash.data.macAddress, 20);
+
+  // set the timezone
   timeSync.begin(configManager.data.sensorTimezone);
 
-  //Wait for connection
+  // wait for connection
   timeSync.waitForSyncResult(5000);
 
   if (!timeSync.isSynced()){
@@ -304,12 +292,14 @@ void setup()
   String msg = "\"status\" : \"INFO\", \"msg\" : \"restarted " + String(rst_cause) + "\"";
   splunkpost(msg); 
   //splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
+
+
 }
 
 void loop()
 {
-  //software interrupts.. dont touch next line!
-  WiFiManager.loop();updater.loop();configManager.loop(); 
+  // software interrupts.. dont touch next line!
+  WiFiManager.loop();updater.loop();configManager.loop();dash.loop(); 
 
   if (WiFiManager.isCaptivePortal()){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
@@ -328,6 +318,7 @@ void loop()
 
   if (millis() - msTickSplunk > configManager.data.updateSpeed){
     msTickSplunk = millis();
+      dash.data.httpResponse++;
 
     digitalWrite(Splunking_LED, HIGH);
 
