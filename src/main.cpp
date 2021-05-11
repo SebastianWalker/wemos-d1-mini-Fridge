@@ -320,7 +320,7 @@ void loop()
     digitalWrite(Splunking_LED, HIGH);
 
   // Read the light intensity
-    LDRvalue = map(analogRead(LDR), 0,1024,0,100);
+  //  LDRvalue = map(analogRead(LDR), 0,1024,0,100);
   
   // PIR
   // if last trigger time is inside the last update intervall then log motion as true, else the checkPIR function has reset the pirTripped to 0 anyways
@@ -349,10 +349,10 @@ void loop()
 
   // only report these sensors if they are up and running... 
     String PIR_data = (configManager.data.pirInstalled) ? "\"PIR_State\": \"" + String(pirTripped) + "\" , " : "";
-
+    String LDR_data = (configManager.data.ldrInstalled) ? "\"lightIndex\": \"" + String(map(analogRead(LDR), 0,1024,0,100)) + "\" , " : "";
   // DHT11 reporting NaN ?
     String DHT11_data = dhtErr ? "" : "\"DHT11_Temp\": \"" + String(t) + "\" , "
-                                                      "\"DHT11_Humidity\": \"" + String(h) + "\" , ";
+                                      "\"DHT11_Humidity\": \"" + String(h) + "\" , ";
 
   // BME280 found at setup on I2C ?
     String BME280_data = bmeErr ? "" :  "\"BME280_Temp\": \"" + String(temp_event.temperature) + "\" , "
@@ -392,7 +392,8 @@ void loop()
   String report = configManager.data.unifiedSensorData ? unifiedSensor_data : singleSensor_data;
 
   // build the event data string
-    String eventData =  "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
+    String eventData =  //"\"lightIndex\": \"" + String(LDRvalue) + "\" , "
+                          LDR_data
                         + PIR_data
                         + report 
                         + MAX44009_data + 
