@@ -66,9 +66,6 @@ extern "C" {
   #define Heartbeat_LED D4 // D4 = GPIO2 = onchip LED
   #define Splunking_LED D8 // output pin for measurement and splunking indicator
 
-// Stuff for Splunk
-  String eventData="";
-
 // variable for timing
   static unsigned long msTickSplunk = 0;
 
@@ -141,7 +138,7 @@ void splunkpost(String PostData){
   //Build the request
   WiFiClient client; // just to avoid deprecation error on http.begin(url)
   HTTPClient http;
-  String splunkurl="http://"+ String(configManager.data.splunkindexer) +"/services/collector"; //removed :8088 due to DOCKER container port redirect.. port now lives in the splunkindexer variable
+  String splunkurl="http://"+ String(configManager.data.splunkindexer) +"/services/collector";
   String tokenValue="Splunk " + String(configManager.data.collectorToken);
   
   // fire at will!! 
@@ -300,6 +297,7 @@ void loop()
 {
   // software interrupts.. dont touch next line!
   WiFiManager.loop();updater.loop();configManager.loop();dash.loop(); 
+  yield();
 
   if (WiFiManager.isCaptivePortal()){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
@@ -318,7 +316,6 @@ void loop()
 
   if (millis() - msTickSplunk > configManager.data.updateSpeed){
     msTickSplunk = millis();
-      dash.data.httpResponse++;
 
     digitalWrite(Splunking_LED, HIGH);
 
@@ -344,18 +341,17 @@ void loop()
   // AHT10 END
 
 
-  // Reading temperature or humidity takes about 250 milliseconds!
+  // Reading DHT10 temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
     float h = dht.readHumidity();
-  // Read temperature as Celsius (the default)
-    float t = dht.readTemperature();
-  
+    float t = dht.readTemperature(); // Read temperature as Celsius (the default)
+    bool dhtErr = (isnan(h) || isnan(t)) ? true : false;
 
   // only report these sensors if they are up and running... 
     String PIR_data = (configManager.data.pirInstalled) ? "\"PIR_State\": \"" + String(pirTripped) + "\" , " : "";
 
   // DHT11 reporting NaN ?
-    String DHT11_data = (isnan(h) || isnan(t)) ? "" : "\"DHT11_Temp\": \"" + String(t) + "\" , "
+    String DHT11_data = dhtErr ? "" : "\"DHT11_Temp\": \"" + String(t) + "\" , "
                                                       "\"DHT11_Humidity\": \"" + String(h) + "\" , ";
 
   // BME280 found at setup on I2C ?
@@ -371,15 +367,37 @@ void loop()
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
                                        "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
   
+
+  // report unified sensor data
+  // only name it Temperature instead of AHT10_Temp or BME280_Temp
+  // take the best sensor first if available
+  String unifiedSensor_data = "";
+  if (!bmeErr){
+    unifiedSensor_data = "\"Temperature\":\"" + String(temp_event.temperature) + "\", "
+                  "\"Pressure\":\""    + String(pressure_event.pressure) + "\", "
+                  "\"Humidity\":\""    + String(humidity_event.relative_humidity) + "\", ";
+
+  }else if(!ahtErr || aht10_humidity.relative_humidity != 0){
+    unifiedSensor_data = "\"Temperature\":\"" + String(aht10_temp.temperature) + "\", "
+                  "\"Humidity\":\""    + String(aht10_humidity.relative_humidity) + "\", ";
+
+  }else if (!dhtErr){
+    unifiedSensor_data = "\"Temperature\":\"" + String(t) + "\", "
+                  "\"Humidity\":\""    + String(h) + "\", ";
+
+  }
+
+  String singleSensor_data = DHT11_data + BME280_data + AHT10_data;
+
+  String report = configManager.data.unifiedSensorData ? unifiedSensor_data : singleSensor_data;
+
   // build the event data string
-    eventData =   "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
-                  + PIR_data
-                  + DHT11_data 
-                  + BME280_data
-                  + AHT10_data  
-                  + MAX44009_data + 
-                  //"\"HCSR04_Distance\": \"" + String(HCSR04.read()) + "\" , "
-                  "\"uptime\": \"" + String(millis()/1000) + "\" ";
+    String eventData =  "\"lightIndex\": \"" + String(LDRvalue) + "\" , "
+                        + PIR_data
+                        + report 
+                        + MAX44009_data + 
+                        //"\"HCSR04_Distance\": \"" + String(HCSR04.read()) + "\" , "
+                        "\"uptime\": \"" + String(millis()/1000) + "\" ";
 
   //send off the data
     splunkpost(eventData);

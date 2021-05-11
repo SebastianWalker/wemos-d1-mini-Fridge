@@ -37,7 +37,7 @@
     },
     {
         "name": "clientName",
-        "label": "Client Name",
+        "label": "Host Name",
         "type": "char",
         "length": 20,
         "value": "MAC_ADDRESS" 
@@ -66,6 +66,12 @@
         "label": "blink heartbeat",
         "type": "bool",
         "value": true
+    },
+    {
+        "name": "unifiedSensorData",
+        "label": "unified sensors",
+        "type": "bool",
+        "value": false
     },
     {
         "name": "pirInstalled",
