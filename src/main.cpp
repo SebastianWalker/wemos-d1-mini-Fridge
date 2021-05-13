@@ -37,7 +37,8 @@ extern "C" {
   #include <Adafruit_AHTX0.h>
   boolean ahtErr = true; // set to false once wire.begin is successful 
   Adafruit_AHTX0 aht;
-  Adafruit_Sensor *aht_humidity, *aht_temp;
+  Adafruit_Sensor *aht_humidity , *aht_temp; // AHT and BME seems not to be implemented in the same way.. getXYZSensor will be done in Setup()
+
 
 // Stuff for the DHT sensor
   #include "DHT.h"
@@ -185,7 +186,8 @@ void setup()
 {
   rst_info *resetInfo;
   resetInfo = ESP.getResetInfoPtr();
-  int rst_cause = resetInfo->reason;
+  String rst_string = ESP.getResetReason(); // good for logging to splunk as plain text
+  int rst_cause = resetInfo->reason;        // good to use in code 
   switch (rst_cause){
     case REASON_DEFAULT_RST:      /* normal startup by power on */
       break;
@@ -286,10 +288,8 @@ void setup()
     aht_humidity = aht.getHumiditySensor();
   }
   // AHT10 END
-  String msg = "\"status\" : \"INFO\", \"msg\" : \"restarted " + String(rst_cause) + "\"";
+  String msg = "\"status\" : \"INFO\", \"msg\" : \"restarted " + String(rst_cause) + "-" + rst_string + "\"";
   splunkpost(msg); 
-  //splunkpost("\"status\" : \"INFO\", \"msg\" : \"restarted\""); 
-
 
 }
 
@@ -307,7 +307,7 @@ void loop()
     // toggle LED every second if heartbeat is activated in config
     digitalWrite(Heartbeat_LED, configManager.data.heartbeat ? ((millis() / 1000) % 2) : 1);  
   }
-     
+
   // restart over web interface...
   if (configManager.data.forceRestart){forceRestart();}
 
@@ -327,19 +327,21 @@ void loop()
     if (pirTrippedTime >= msTickSplunk-configManager.data.updateSpeed){pirTripped = 1;}
 
   // BME280
-    sensors_event_t temp_event, pressure_event, humidity_event;
-    bme_temp->getEvent(&temp_event);
-    bme_pressure->getEvent(&pressure_event);
-    bme_humidity->getEvent(&humidity_event);
+    sensors_event_t temp_event, pressure_event, humidity_event; // sensor event need to be declared for downstream code
+    if (!bmeErr){ // only accessible if sensor is present.. else exception 28 is triggered => restart ESP
+      bme_temp->getEvent(&temp_event);
+      bme_pressure->getEvent(&pressure_event);
+      bme_humidity->getEvent(&humidity_event);
+    }
   // BME280 END
 
-
   // AHT10
-    sensors_event_t aht10_humidity, aht10_temp;
-    aht_humidity->getEvent(&aht10_humidity);
-    aht_temp->getEvent(&aht10_temp);
+    sensors_event_t aht10_humidity, aht10_temp; // sensor event need to be declared for downstream code
+    if (!ahtErr){ // only accessible if sensor is present.. else exception 28 is triggered => restart ESP
+      aht_humidity->getEvent(&aht10_humidity); 
+      aht_temp->getEvent(&aht10_temp);
+    }
   // AHT10 END
-
 
   // Reading DHT10 temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
@@ -365,25 +367,24 @@ void loop()
  
   // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
-                                       "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
+                                                                                  "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
   
-
   // report unified sensor data
   // only name it Temperature instead of AHT10_Temp or BME280_Temp
   // take the best sensor first if available
   String unifiedSensor_data = "";
   if (!bmeErr){
     unifiedSensor_data = "\"Temperature\":\"" + String(temp_event.temperature) + "\", "
-                  "\"Pressure\":\""    + String(pressure_event.pressure) + "\", "
-                  "\"Humidity\":\""    + String(humidity_event.relative_humidity) + "\", ";
+                         "\"Pressure\":\""    + String(pressure_event.pressure) + "\", "
+                         "\"Humidity\":\""    + String(humidity_event.relative_humidity) + "\", ";
 
   }else if(!ahtErr || aht10_humidity.relative_humidity != 0){
     unifiedSensor_data = "\"Temperature\":\"" + String(aht10_temp.temperature) + "\", "
-                  "\"Humidity\":\""    + String(aht10_humidity.relative_humidity) + "\", ";
+                         "\"Humidity\":\""    + String(aht10_humidity.relative_humidity) + "\", ";
 
   }else if (!dhtErr){
     unifiedSensor_data = "\"Temperature\":\"" + String(t) + "\", "
-                  "\"Humidity\":\""    + String(h) + "\", ";
+                         "\"Humidity\":\""    + String(h) + "\", ";
 
   }
 
@@ -392,14 +393,12 @@ void loop()
   String report = configManager.data.unifiedSensorData ? unifiedSensor_data : singleSensor_data;
 
   // build the event data string
-    String eventData =  //"\"lightIndex\": \"" + String(LDRvalue) + "\" , "
-                          LDR_data
+    String eventData =    LDR_data
                         + PIR_data
                         + report 
                         + MAX44009_data + 
                         //"\"HCSR04_Distance\": \"" + String(HCSR04.read()) + "\" , "
                         "\"uptime\": \"" + String(millis()/1000) + "\" ";
-
   //send off the data
     splunkpost(eventData);
 
