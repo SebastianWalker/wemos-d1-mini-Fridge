@@ -4,6 +4,7 @@
 extern "C" {
 #include <user_interface.h>
 }
+int rst_cause;
 
 // Stuff for the WiFi manager 
 #include "LittleFS.h"
@@ -147,15 +148,20 @@ void splunkpost(String PostData){
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", tokenValue);
 
-  Serial.print("splunking: ");
-  Serial.print(payload);
+  if (!configManager.data.silenceSerial){
+    Serial.print("splunking: ");
+    Serial.print(payload);
+  }
+
 
   String contentlength = String(payload.length());
   http.addHeader("Content-Length", contentlength );
   int httpResponseCode = http.POST(payload);
-  http.writeToStream(&Serial);
-  Serial.printf("HTTP: %d", httpResponseCode);  
-  Serial.println();
+  if (!configManager.data.silenceSerial){
+    http.writeToStream(&Serial);
+    Serial.printf("HTTP: %d", httpResponseCode);  
+    Serial.println();
+  }
   http.end();
 
   dash.data.httpResponse = httpResponseCode;
@@ -184,10 +190,13 @@ void forceRestart(){
 
 void setup()
 {
+
+  //wifi_set_sleep_type(LIGHT_SLEEP_T);
+
   rst_info *resetInfo;
   resetInfo = ESP.getResetInfoPtr();
   String rst_string = ESP.getResetReason(); // good for logging to splunk as plain text
-  int rst_cause = resetInfo->reason;        // good to use in code 
+  rst_cause = resetInfo->reason;        // good to use in code 
   switch (rst_cause){
     case REASON_DEFAULT_RST:      /* normal startup by power on */
       break;
@@ -314,7 +323,7 @@ void loop()
   // read PIR state
   if (configManager.data.pirInstalled){checkPir();}
 
-  if (millis() - msTickSplunk > configManager.data.updateSpeed){
+  if (millis() - msTickSplunk > configManager.data.updateSpeed || rst_cause == REASON_DEEP_SLEEP_AWAKE){
     msTickSplunk = millis();
 
     digitalWrite(Splunking_LED, HIGH);
@@ -403,5 +412,15 @@ void loop()
     splunkpost(eventData);
 
     digitalWrite(Splunking_LED, LOW);
+
   }
+
+  // sleep a little in light sleep during a delay call.. hopefully reducing heat from the esp
+  // fixfix maybe set it to the update intervall.. and just sleep between two updates
+  //delay(configManager.data.delay);
+
+  // stay awake for 60s after hard reset to flash or change config
+  if (millis() > 60000 && rst_cause != REASON_DEEP_SLEEP_AWAKE){ESP.deepSleep(configManager.data.delay);}
+  // if woken up from deep sleep .. go back to deep sleep
+  if (rst_cause == REASON_DEEP_SLEEP_AWAKE){ESP.deepSleep(configManager.data.delay);}
 }

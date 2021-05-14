@@ -8,6 +8,14 @@
         "value": "SensorBox"
     },
     {
+        "name": "projectVersion",
+        "label": "Project Version",
+        "type": "char",
+        "hidden":true,
+        "length": 32,
+        "value": "20210514T222400"
+    },
+    {
         "name": "splunkindexer",
         "label": "Splunk Indexer (IP:Port)",
         "type": "char",
@@ -49,6 +57,12 @@
         "value": 5000
     },
     {
+        "name": "delay",
+        "label": "lightsleep (ms)",
+        "type": "uint32_t",
+        "value": 100
+    },
+    {
         "name": "sensorTimezone",
         "label": "Sensor Timezone",
         "type": "char",
@@ -64,6 +78,12 @@
     {
         "name": "heartbeat",
         "label": "blink heartbeat",
+        "type": "bool",
+        "value": true
+    },
+    {
+        "name": "silenceSerial",
+        "label": "deactivate Serial output",
         "type": "bool",
         "value": true
     },
