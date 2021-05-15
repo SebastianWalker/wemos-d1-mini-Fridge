@@ -190,8 +190,8 @@ void forceRestart(){
 
 void setup()
 {
-
-  //wifi_set_sleep_type(LIGHT_SLEEP_T);
+  // enable light sleep = wifi/cpu off during delay calls
+  wifi_set_sleep_type(LIGHT_SLEEP_T);
 
   rst_info *resetInfo;
   resetInfo = ESP.getResetInfoPtr();
@@ -224,7 +224,7 @@ void setup()
   }
 
   Serial.begin(115200);
-
+  Serial.println(rst_string);
   LittleFS.begin(); GUI.begin(); configManager.begin(); dash.begin(1000);
 
   // add the MAC to the Project name to avoid duplicate SSIDs
@@ -249,15 +249,6 @@ void setup()
   // wait for connection
   timeSync.waitForSyncResult(5000);
 
-  if (!timeSync.isSynced()){
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"No time sync available.\"");
-  }
-  else{
-    //time_t now = time(nullptr);
-    //Serial.print(PSTR("Local time: ")); Serial.println(asctime(localtime(&now)));
-    //Serial.print(PSTR("UTC: ")); Serial.println(asctime(gmtime(&now)));
-  }
-
   // set input/output pins
   pinMode(Heartbeat_LED, OUTPUT); // heartbeat LED
   digitalWrite(Heartbeat_LED, HIGH);
@@ -269,37 +260,38 @@ void setup()
 
 
   // BME280
-  if (!bme.begin(0x76)){
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"BME280 not found.\""); 
-  }
-  else{
+  if (bme.begin(0x76)){
     bmeErr = false; 
   }
   // BME280 END
 
   // MAX44009 lux sensor
-  if (!luxSensor.isConnected()){
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"MAX44009 not found.\""); 
-  }
-  else{
+  if (luxSensor.isConnected()){
     luxSensor.setAutomaticMode();
     luxErr = false;
   }
   // MAX44009 lux sensor END
 
   // AHT10
-  if (!aht.begin()){
-    splunkpost("\"status\" : \"ERROR\", \"msg\" : \"AHT10 not found.\""); 
-  }
-  else{
+  if (aht.begin()){
     ahtErr = false; 
     aht_temp = aht.getTemperatureSensor();
     aht_humidity = aht.getHumiditySensor();
   }
   // AHT10 END
-  String msg = "\"status\" : \"INFO\", \"msg\" : \"restarted " + String(rst_cause) + "-" + rst_string + "\"";
-  splunkpost(msg); 
 
+  // only report sensor status on hardware restart.. dont report it after deep-sleep wake
+  // after deep-sleep wake silently go into measurement and send data only
+  if (rst_cause != REASON_DEEP_SLEEP_AWAKE){
+    String msgSensorStatus =  "\"msg\":\"restarted\", "
+                              "\"rstReason\":\""  + String(rst_cause) + " - "  + String(rst_string) + "\", "
+                              "\"BME280\":\""     + String(!bmeErr) + "\", "
+                              "\"AHT10\":\""      + String(!ahtErr) + "\", "
+                              "\"MAX44009\":\""   + String(!luxErr) + "\", "
+                              "\"TimeSync\":\""   + String(timeSync.isSynced()) + "\"";
+
+    splunkpost(msgSensorStatus); 
+  }
 }
 
 void loop()
@@ -308,7 +300,7 @@ void loop()
   WiFiManager.loop();updater.loop();configManager.loop();dash.loop(); 
   yield();
 
-  if (WiFiManager.isCaptivePortal()){
+  if (WiFiManager.isCaptivePortal() && rst_cause != REASON_DEEP_SLEEP_AWAKE){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
     return;
   }
@@ -327,9 +319,6 @@ void loop()
     msTickSplunk = millis();
 
     digitalWrite(Splunking_LED, HIGH);
-
-  // Read the light intensity
-  //  LDRvalue = map(analogRead(LDR), 0,1024,0,100);
   
   // PIR
   // if last trigger time is inside the last update intervall then log motion as true, else the checkPIR function has reset the pirTripped to 0 anyways
@@ -375,39 +364,44 @@ void loop()
                                           "\"MAX44009_IntegrationTime\": \"" + String(luxSensor.getIntegrationTime()/1000.0) + "\" , ";
  
   // AHT10 sometimes reports ZERO humidity.. thats bullshit.. so dont report anything
+  // does not contain the last comma.. this will be set by uptime depending on deepsleep
     String AHT10_data = (ahtErr || aht10_humidity.relative_humidity == 0) ? "" :  "\"AHT10_Temp\": \"" + String(aht10_temp.temperature) + "\" , "
-                                                                                  "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" , ";
+                                                                                  "\"AHT10_Humidity\": \"" + String(aht10_humidity.relative_humidity) + "\" ";
   
   // report unified sensor data
   // only name it Temperature instead of AHT10_Temp or BME280_Temp
   // take the best sensor first if available
-  String unifiedSensor_data = "";
+  String unifiedSensor_data = ""; // does not contain the last comma.. this will be set by uptime depending on deepsleep
   if (!bmeErr){
     unifiedSensor_data = "\"Temperature\":\"" + String(temp_event.temperature) + "\", "
                          "\"Pressure\":\""    + String(pressure_event.pressure) + "\", "
-                         "\"Humidity\":\""    + String(humidity_event.relative_humidity) + "\", ";
+                         "\"Humidity\":\""    + String(humidity_event.relative_humidity) + "\" ";
 
   }else if(!ahtErr || aht10_humidity.relative_humidity != 0){
     unifiedSensor_data = "\"Temperature\":\"" + String(aht10_temp.temperature) + "\", "
-                         "\"Humidity\":\""    + String(aht10_humidity.relative_humidity) + "\", ";
+                         "\"Humidity\":\""    + String(aht10_humidity.relative_humidity) + "\" ";
 
   }else if (!dhtErr){
     unifiedSensor_data = "\"Temperature\":\"" + String(t) + "\", "
-                         "\"Humidity\":\""    + String(h) + "\", ";
+                         "\"Humidity\":\""    + String(h) + "\" ";
 
   }
 
-  String singleSensor_data = DHT11_data + BME280_data + AHT10_data;
+  String singleSensor_data = DHT11_data + BME280_data + AHT10_data; // AHT10 does not contain the last comma.. this will be set by uptime depending on deepsleep
 
   String report = configManager.data.unifiedSensorData ? unifiedSensor_data : singleSensor_data;
+
+  String uptime = (rst_cause == REASON_DEEP_SLEEP_AWAKE) ? "" : ", \"uptime\": \"" + String(millis()/1000) + "\" ";
 
   // build the event data string
     String eventData =    LDR_data
                         + PIR_data
+                        + MAX44009_data 
                         + report 
-                        + MAX44009_data + 
+                        + uptime;
                         //"\"HCSR04_Distance\": \"" + String(HCSR04.read()) + "\" , "
-                        "\"uptime\": \"" + String(millis()/1000) + "\" ";
+                        //"\"uptime\": \"" + String(millis()/1000) + "\" ";
+
   //send off the data
     splunkpost(eventData);
 
@@ -417,10 +411,19 @@ void loop()
 
   // sleep a little in light sleep during a delay call.. hopefully reducing heat from the esp
   // fixfix maybe set it to the update intervall.. and just sleep between two updates
-  //delay(configManager.data.delay);
+  delay(configManager.data.delay);
 
   // stay awake for 60s after hard reset to flash or change config
-  if (millis() > 60000 && rst_cause != REASON_DEEP_SLEEP_AWAKE){ESP.deepSleep(configManager.data.delay);}
-  // if woken up from deep sleep .. go back to deep sleep
-  if (rst_cause == REASON_DEEP_SLEEP_AWAKE){ESP.deepSleep(configManager.data.delay);}
+  // deepsleep config of ZERO will disable deepsleep 
+  if (configManager.data.deepsleep != 0){
+    if (millis() > 60000 && rst_cause != REASON_DEEP_SLEEP_AWAKE){
+      Serial.println("60s after restart.. going to deepsleep");
+      ESP.deepSleep(configManager.data.deepsleep * 1000000);
+    }
+    // if woken up from deep sleep .. go back to deep sleep
+    if (rst_cause == REASON_DEEP_SLEEP_AWAKE){
+      Serial.println("woke up, did work, going to sleep again");
+      ESP.deepSleep(configManager.data.deepsleep * 1000000);
+    } // from seconds in webconfig to us in function call = "* 1000000"
+  }
 }

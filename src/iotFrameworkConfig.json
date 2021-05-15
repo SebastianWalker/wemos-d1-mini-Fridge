@@ -59,8 +59,20 @@
     {
         "name": "delay",
         "label": "lightsleep (ms)",
-        "type": "uint32_t",
-        "value": 100
+        "type": "uint16_t",
+        "value": 100,
+        "min": 0,
+        "max": 500,
+        "step": 50
+    },
+    {
+        "name": "deepsleep",
+        "label": "Deepsleep (s)",
+        "type": "uint16_t",
+        "value": 0,
+        "min": 0,
+        "max": 3600,
+        "step": 10
     },
     {
         "name": "sensorTimezone",
@@ -85,13 +97,13 @@
         "name": "silenceSerial",
         "label": "deactivate Serial output",
         "type": "bool",
-        "value": true
+        "value": false
     },
     {
         "name": "unifiedSensorData",
         "label": "unified sensors",
         "type": "bool",
-        "value": false
+        "value": true
     },
     {
         "name": "pirInstalled",
