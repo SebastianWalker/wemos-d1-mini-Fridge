@@ -18,6 +18,9 @@ int rst_cause;
 #include <TZ.h>
 #include "ESP8266HTTPClient.h"
 
+#include "ESP8266mDNS.h"
+
+
 // I2C sensors
 	#include <Wire.h>  
 
@@ -70,6 +73,14 @@ int rst_cause;
 
 // variable for timing
   static unsigned long msTickSplunk = 0;
+
+// error counter for http connection -> reset esp after to many errors
+  static int httpError = 0;
+  
+
+// Software restart 
+void(* resetFunc) (void) = 0; //declare reset function @ address 0
+
 
 /*
  * Returns a string of Localtime
@@ -164,17 +175,17 @@ void splunkpost(String PostData){
   }
   http.end();
 
+  // check for http error
+  if (httpResponseCode > 200){
+    httpError++;
+    if (httpError>10){resetFunc();}
+  }
+
+  // send data to dashboard
   dash.data.httpResponse = httpResponseCode;
   dash.send();
 }
 
-void checkPir(){ 
-  pirTripped = digitalRead(PIR);
-  if (pirTripped) pirTrippedTime = millis();
-}
-
-// Software restart 
-void(* resetFunc) (void) = 0; //declare reset function @ address 0
 /*
  * Triggers a software restart
  * resets the flag in config manager
@@ -188,6 +199,21 @@ void forceRestart(){
   resetFunc();
 }
 
+void checkPir(){ 
+  pirTripped = digitalRead(PIR);
+  if (pirTripped) pirTrippedTime = millis();
+}
+
+/*
+ * callback function for configManager save to EEPROM
+ */
+void saveCallback(){
+  // do stuff on save
+
+  // set new hostname for MDNS on save
+  // didnt find a way to get the change within the loop.. so change it here anyways
+  MDNS.setHostname(configManager.data.clientName);
+}
 void setup()
 {
   // enable light sleep = wifi/cpu off during delay calls
@@ -225,12 +251,21 @@ void setup()
 
   Serial.begin(115200);
   Serial.println(rst_string);
+
   LittleFS.begin(); GUI.begin(); configManager.begin(); dash.begin(1000);
+  configManager.setConfigSaveCallback(saveCallback); // executed everytime a new config is saved
+
+  // get the mac address as int -> hex -> use it as part of wifi name
+  uint8_t macAddr[6];
+  WiFi.macAddress(macAddr);
+  //Serial.println(macAddr[5], HEX);Serial.println(macAddr[4], HEX);Serial.println(macAddr[3], HEX);Serial.println(macAddr[2], HEX);Serial.println(macAddr[1], HEX);Serial.println(macAddr[0], HEX);
+  String macHex = String(macAddr[3], HEX) + String(macAddr[4], HEX) + String(macAddr[5], HEX);
+  macHex.toUpperCase();
 
   // add the MAC to the Project name to avoid duplicate SSIDs
   char AP_Name[60]; // 60 should be more than enough...
   strcpy(AP_Name, configManager.data.projectName);
-  strcat(AP_Name, " - ");
+  strcat(AP_Name, " _ ");
   strcat(AP_Name, WiFi.macAddress().c_str());
   WiFiManager.begin(AP_Name); //192.168.4.1
 
@@ -239,6 +274,9 @@ void setup()
     WiFi.macAddress().toCharArray(configManager.data.clientName, 20);
     configManager.save();
   }
+
+  // just for testing.. needs some fixfix
+  MDNS.begin(configManager.data.clientName);
 
   // set mac to dashboard
   WiFi.macAddress().toCharArray(dash.data.macAddress, 20);
@@ -297,11 +335,14 @@ void setup()
 void loop()
 {
   // software interrupts.. dont touch next line!
-  WiFiManager.loop();updater.loop();configManager.loop();dash.loop(); 
+  WiFiManager.loop();updater.loop();configManager.loop();dash.loop();MDNS.update();
   yield();
 
   if (WiFiManager.isCaptivePortal() && rst_cause != REASON_DEEP_SLEEP_AWAKE){
     digitalWrite(Heartbeat_LED, (millis() / 100) % 2);
+    
+    // fixfix suicide after to much time spent in captive portal
+
     return;
   }
   else{
@@ -315,7 +356,7 @@ void loop()
   // read PIR state
   if (configManager.data.pirInstalled){checkPir();}
 
-  if (millis() - msTickSplunk > configManager.data.updateSpeed || rst_cause == REASON_DEEP_SLEEP_AWAKE){
+  if (millis() - msTickSplunk > configManager.data.updateSpeed || (rst_cause == REASON_DEEP_SLEEP_AWAKE && configManager.data.deepsleep > 0)){
     msTickSplunk = millis();
 
     digitalWrite(Splunking_LED, HIGH);
@@ -411,6 +452,7 @@ void loop()
 
   // sleep a little in light sleep during a delay call.. hopefully reducing heat from the esp
   // fixfix maybe set it to the update intervall.. and just sleep between two updates
+  // fixfix bad idea. web gui gets inresponsive at long sleep times
   delay(configManager.data.delay);
 
   // stay awake for 60s after hard reset to flash or change config
