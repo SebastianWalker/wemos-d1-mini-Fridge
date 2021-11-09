@@ -12,7 +12,7 @@
 * 
 
 # ToDo
-* make readme ncie and shiny
+* make readme nice and shiny
 * needs fix in documentation
 * better comments in source
 * fix random crash and resart of sensor
