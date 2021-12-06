@@ -17,3 +17,8 @@
 * better comments in source
 * fix random crash and resart of sensor
 * transfer learnings back to main project
+
+# Captain's Log :D
+* came back to this after a few weeks (moved 100km to a new home)
+* vs code and platformio greeted me with an error msg i didnt se before: ‘cannot find ..\framework-arduinoespressif8266\tools\sdk\libc\xtensa-lx106-elf\include‘
+** solution so far: open a terminal in the project and call ‘pio platform update‘

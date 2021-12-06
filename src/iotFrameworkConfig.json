@@ -5,7 +5,7 @@
         "type": "char",
         "hidden":true,
         "length": 32,
-        "value": "SensorBox"
+        "value": "thisSensorBox"
     },
     {
         "name": "projectVersion",
