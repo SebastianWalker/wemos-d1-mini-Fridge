@@ -22,3 +22,6 @@
 * came back to this after a few weeks (moved 100km to a new home)
 * vs code and platformio greeted me with an error msg i didnt se before: ‘cannot find ..\framework-arduinoespressif8266\tools\sdk\libc\xtensa-lx106-elf\include‘
 ** solution so far: open a terminal in the project and call ‘pio platform update‘
+** go to IoT framework run `npm ci`and `npx browserslist@latest --update-db`and `npm run build` once.. then build solution again
+** for some reason the wifi AP did get a FairyLight_last6digitsOfMacAddr name and i could not connect to it.. after changing the AP name in code and recompile it worked again.. even after rollback of the change.. anyways maybe it worked because i deleted the build folder 
+

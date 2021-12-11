@@ -268,6 +268,7 @@ void setup()
   strcat(AP_Name, " _ ");
   strcat(AP_Name, WiFi.macAddress().c_str());
   WiFiManager.begin(AP_Name); //192.168.4.1
+  //WiFiManager.begin("newNetwork"); //192.168.4.1
 
   // if no client name is set (default=MAC_ADRESS) return the MAC instead
   if (String(configManager.data.clientName) == "MAC_ADDRESS"){

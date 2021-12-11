@@ -5,7 +5,7 @@
         "type": "char",
         "hidden":true,
         "length": 32,
-        "value": "thisSensorBox"
+        "value": "SensorBox"
     },
     {
         "name": "projectVersion",
@@ -13,14 +13,14 @@
         "type": "char",
         "hidden":true,
         "length": 32,
-        "value": "20210514T222400"
+        "value": "20211207T212200"
     },
     {
         "name": "splunkindexer",
         "label": "Splunk Indexer (IP:Port)",
         "type": "char",
         "length": 25,
-        "value": "54.82.123.23:8088"
+        "value": "192.168.1.234:8088"
     },
     {
         "name": "index",
@@ -41,7 +41,7 @@
         "label": "HEC Token",
         "type": "char",
         "length": 40,
-        "value": "fe6f64d8-847e-405b-8f1b-034ffd76a261"
+        "value": "8bb95e1a-4025-4949-ba08-367e698dd948"
     },
     {
         "name": "clientName",
@@ -60,7 +60,7 @@
         "name": "delay",
         "label": "lightsleep (ms)",
         "type": "uint16_t",
-        "value": 100,
+        "value": 0,
         "min": 0,
         "max": 500,
         "step": 50
